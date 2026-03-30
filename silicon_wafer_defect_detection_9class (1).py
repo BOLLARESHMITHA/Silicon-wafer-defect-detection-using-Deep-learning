@@ -835,7 +835,7 @@ GDRIVE_SAVE = '/content/drive/MyDrive/WaferProject'
 os.makedirs(GDRIVE_SAVE, exist_ok=True)
 print(f'✅ Drive mounted. Weights will be saved to: {GDRIVE_SAVE}')
 
-!pip install ultralytics
+'''!pip install ultralytics '''
 
 # ═══════════════════════════════════════════════════════════════════════════
 # YOLOv11 — Defect Detection + Localization (Bounding Boxes)
