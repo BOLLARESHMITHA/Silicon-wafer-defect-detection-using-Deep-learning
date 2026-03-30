@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image
 import os
-import cv2
 
 # ───────────────── CONFIG ─────────────────
 st.set_page_config(
@@ -103,24 +102,13 @@ model = load_model()
 #
 # This is the CORRECTED version of the original app (which had wrong preprocessing).
 
-def preprocess_uploaded_image(img: Image.Image) -> torch.Tensor:
-    """
-    Convert an uploaded PIL image to the same float32 tensor format
-    the training pipeline produces.
-    """
-    # Convert to grayscale — wafer maps are single-channel
-    img_gray = img.convert("L")  # shape: (W, H), values 0-255
-
-    # Resize to training resolution
+def preprocess_uploaded_image(img):
+    img_gray = img.convert("L")
     img_resized = img_gray.resize((IMG_SIZE, IMG_SIZE), Image.NEAREST)
 
-    # To numpy uint8 then normalize to [0,1]
-    arr = np.array(img_resized, dtype=np.float32) / 255.0   # (64, 64)
+    arr = np.array(img_resized, dtype=np.float32) / 255.0
+    arr3 = np.stack([arr, arr, arr], axis=-1)
 
-    # Stack into 3-channel (matches training's np.stack([img]*3, axis=-1))
-    arr3 = np.stack([arr, arr, arr], axis=-1)               # (64, 64, 3)
-
-    # (H, W, C) → (C, H, W), add batch dim
     tensor = torch.tensor(arr3).permute(2, 0, 1).unsqueeze(0).float()
     return tensor
 
