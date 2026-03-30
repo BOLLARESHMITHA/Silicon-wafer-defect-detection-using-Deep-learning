@@ -48,7 +48,9 @@ except ImportError:
 import torch, gc, os
 
 # ── Verify GPU ───────────────────────────────────────────────────────────
-assert torch.cuda.is_available(), '❌ GPU not found! Runtime → Change runtime type → T4 GPU'
+import torch
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Using device:", DEVICE)
 print(f'✅ GPU : {torch.cuda.get_device_name(0)}')
 print(f'   VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB')
 
