@@ -5,7 +5,6 @@
 # =============================================================================
 
 import os
-import cv2
 import numpy as np
 import torch
 import torch.nn as nn
@@ -341,9 +340,10 @@ def load_model():
 def preprocess(img_pil: Image.Image, size: int = IMG_SIZE) -> np.ndarray:
     """colour / grayscale → gray → resize → normalise → 3-channel stack"""
     img_gray = np.array(img_pil.convert("L"), dtype=np.float32)
-    img_gray = cv2.resize(img_gray, (size, size), interpolation=cv2.INTER_NEAREST)
-    img_gray = img_gray / 255.0
-    return np.stack([img_gray, img_gray, img_gray], axis=-1)   # (H, W, 3)
+    img_gray = img_pil.convert("L")
+    img_gray = img_gray.resize((size, size))
+    img_gray = np.array(img_gray, dtype=np.float32) / 255.0
+    img_arr = np.stack([img_gray]*3, axis=-1)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
