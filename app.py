@@ -5,7 +5,7 @@ CVR College of Engineering | CSE Data Science | Group 20
 
 import streamlit as st
 import numpy as np
-import cv2
+#import cv2
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
@@ -342,9 +342,9 @@ def load_hybrid_model(num_classes):
     return model, False
 
 def preprocess(img_pil, size=IMG_SIZE):
-    img_gray = np.array(img_pil.convert("L"), dtype=np.float32)
-    img_gray = cv2.resize(img_gray, (size, size), interpolation=cv2.INTER_NEAREST)
-    img_gray = img_gray / 255.0
+    img_gray = img_pil.convert("L")  # grayscale
+    img_gray = img_gray.resize((size, size))  # PIL resize (no cv2)
+    img_gray = np.array(img_gray, dtype=np.float32) / 255.0
     return np.stack([img_gray] * 3, axis=-1)
 
 def fig_to_image(fig):
