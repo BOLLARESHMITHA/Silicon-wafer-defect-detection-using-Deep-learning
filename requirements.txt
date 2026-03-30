@@ -11,4 +11,3 @@ seaborn
 tqdm
 ultralytics
 psutil
-opencv-python-headless
