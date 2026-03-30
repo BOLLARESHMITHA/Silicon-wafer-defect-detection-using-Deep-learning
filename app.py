@@ -7,7 +7,7 @@ import os
 
 # ───────────────── CONFIG ─────────────────
 st.set_page_config(
-    page_title="Wafer Defect Inspector",
+    page_title="Wafer Defect Detection",
     page_icon="🔬",
     layout="centered"
 )
@@ -15,86 +15,94 @@ st.set_page_config(
 IMG_SIZE = 64
 DEVICE = torch.device("cpu")
 
-# ───────────────── STYLE ─────────────────
-st.markdown("""
-<style>
-body {background-color: #0e1117; color: #ffffff;}
-.big-title {font-size:28px; font-weight:700; color:#4FC3F7;}
-.card {
-    background:#1c1f26;
-    padding:15px;
-    border-radius:10px;
-    margin-bottom:15px;
-}
-</style>
-""", unsafe_allow_html=True)
+# ───────────────── LOAD CLASS NAMES ─────────────────
+CLASS_PATH = "class_names.npy"
 
-# ───────────────── CLASS NAMES ─────────────────
-@st.cache_resource
-def load_classes():
-    path = "wafer_imgs/class_names.npy"
-    if os.path.exists(path):
-        return list(np.load(path, allow_pickle=True))
-    return ["Center","Donut","Edge-Loc","Edge-Ring",
-            "Loc","Near-full","Random","Scratch","none"]
+if not os.path.exists(CLASS_PATH):
+    st.error("❌ class_names.npy not found")
+    st.stop()
 
-CLASS_NAMES = load_classes()
+CLASS_NAMES = list(np.load(CLASS_PATH, allow_pickle=True))
 NUM_CLASSES = len(CLASS_NAMES)
 
-# ───────────────── MODEL ─────────────────
+# ───────────────── MODEL (EXACT SAME AS TRAINING) ─────────────────
 class HybridCNNTransformer(nn.Module):
-    def __init__(self, num_classes=9):
+    def __init__(self, num_classes=9, img_size=64, d_model=128,
+                 nhead=4, num_layers=2, dropout=0.3):
         super().__init__()
-        self.cnn = nn.Sequential(
-            nn.Conv2d(3,32,3,padding=1), nn.ReLU(), nn.MaxPool2d(2),
-            nn.Conv2d(32,64,3,padding=1), nn.ReLU(), nn.MaxPool2d(2),
-            nn.Conv2d(64,128,3,padding=1), nn.ReLU()
-        )
-        self.fc = nn.Sequential(
-            nn.Linear(128,256),
-            nn.ReLU(),
-            nn.Linear(256,num_classes)
+
+        self.cnn_backbone = nn.Sequential(
+            nn.Conv2d(3, 32, 3, padding=1), nn.BatchNorm2d(32), nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, 3, padding=1), nn.BatchNorm2d(64), nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(64, d_model, 3, padding=1), nn.BatchNorm2d(d_model), nn.ReLU(),
         )
 
-    def forward(self,x):
-        x = self.cnn(x)
-        x = x.mean([2,3])
-        return self.fc(x)
+        feat_h = img_size // 4
+        seq_len = feat_h * feat_h
+
+        self.pos_embed = nn.Parameter(torch.zeros(1, seq_len, d_model))
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=d_model * 4,
+            dropout=dropout,
+            batch_first=True
+        )
+
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        self.head = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Linear(d_model, 256),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, num_classes)
+        )
+
+    def forward(self, x):
+        feat = self.cnn_backbone(x)
+        B, C, H, W = feat.shape
+        feat = feat.flatten(2).transpose(1, 2)
+        feat = feat + self.pos_embed[:, :feat.size(1), :]
+        feat = self.transformer(feat)
+        feat = feat.mean(dim=1)
+        return self.head(feat)
 
 # ───────────────── LOAD MODEL ─────────────────
 @st.cache_resource
 def load_model():
-    path = "best_hybrid.pth"
-    if not os.path.exists(path):
-        return None
+    model_path = "best_hybrid.pth"
+
+    if not os.path.exists(model_path):
+        st.error("❌ best_hybrid.pth not found")
+        st.stop()
 
     model = HybridCNNTransformer(NUM_CLASSES).to(DEVICE)
-    model.load_state_dict(torch.load(path, map_location=DEVICE))
+    model.load_state_dict(torch.load(model_path, map_location=DEVICE))
     model.eval()
     return model
 
 model = load_model()
 
-if model is None:
-    st.error("❌ Model file not found (best_hybrid.pth)")
-    st.stop()
-
-# ───────────────── PREPROCESS ─────────────────
+# ───────────────── PREPROCESS (MATCH TRAINING) ─────────────────
 def preprocess(img):
     img = img.convert("L")
     img = img.resize((IMG_SIZE, IMG_SIZE))
-    img = np.array(img) / 255.0
+    img = np.array(img, dtype=np.float32) / 255.0
     img = np.stack([img]*3, axis=-1)
     return img
 
 # ───────────────── UI ─────────────────
-st.markdown('<div class="big-title">🔬 Wafer Defect Inspector</div>', unsafe_allow_html=True)
-st.write("Upload a wafer image to detect defect type")
+st.title("🔬 Silicon Wafer Defect Detection")
+st.write(f"Model supports {NUM_CLASSES} defect classes")
 
-file = st.file_uploader("Upload Image", type=["png","jpg","jpeg"])
+uploaded_file = st.file_uploader("Upload Wafer Image", type=["png","jpg","jpeg"])
 
-if file:
-    image = Image.open(file)
+if uploaded_file:
+    image = Image.open(uploaded_file)
 
     st.image(image, caption="Uploaded Image", use_container_width=True)
 
@@ -102,20 +110,16 @@ if file:
     tensor = torch.tensor(img).permute(2,0,1).unsqueeze(0).float()
 
     with torch.no_grad():
-        out = model(tensor)
-        probs = torch.softmax(out, dim=1).numpy()[0]
+        outputs = model(tensor)
+        probs = torch.softmax(outputs, dim=1).numpy()[0]
 
     pred_idx = int(np.argmax(probs))
-    pred = CLASS_NAMES[pred_idx]
-    conf = probs[pred_idx]
+    pred_class = CLASS_NAMES[pred_idx]
+    confidence = probs[pred_idx]
 
-    # ── RESULT CARD ──
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.success(f"Prediction: {pred}")
-    st.info(f"Confidence: {conf:.2%}")
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.success(f"Prediction: {pred_class}")
+    st.info(f"Confidence: {confidence:.2%}")
 
-    # ── PROBABILITY BARS ──
     st.subheader("Class Probabilities")
 
     for cls, p in sorted(zip(CLASS_NAMES, probs), key=lambda x: -x[1]):
