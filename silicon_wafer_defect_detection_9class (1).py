@@ -39,11 +39,11 @@ except ImportError:
     print('Installing dependencies...')
     # ── DO NOT reinstall torch/torchvision — Colab T4 already has the right version
     # Reinstalling torch causes duplicate operator RuntimeError
-    !pip install -q albumentations==1.3.1          # pin version, avoids torch conflict
+    '''!pip install -q albumentations==1.3.1          # pin version, avoids torch conflict
     !pip install -q timm==0.9.12                   # Vision Transformer models
     !pip install -q scikit-learn matplotlib seaborn pandas numpy tqdm
     !pip install -q streamlit ultralytics
-    !pip install -q psutil                         # for RAM monitoring
+    !pip install -q psutil                         # for RAM monitoring '''
     print('\n✅ Done. NOW DO: Runtime → Restart session, then run all cells from top.')
 
 # ═══════════════════════════════════════════════════════════════════════════
