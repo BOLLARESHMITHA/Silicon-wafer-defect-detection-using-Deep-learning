@@ -217,7 +217,7 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file)
 
     # ── Preprocess ──
-    tensor = preprocess_uploaded_image(image)
+    tensor = preprocess_uploaded_image(image).to(DEVICE)
 
     # ── Predict ──
     if use_tta and use_temp:
@@ -228,7 +228,7 @@ if uploaded_file is not None:
         method_label = "TTA"
     else:
         with torch.no_grad():
-            logits = model(tensor.to(DEVICE))
+            logits = model(tensor)
             if use_temp:
                 probs = F.softmax(logits / TEMPERATURE, dim=1).cpu().numpy()[0]
                 method_label = "Temperature Calibration"
